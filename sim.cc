@@ -2,6 +2,14 @@
 #include <stdlib.h>
 #include <inttypes.h>
 #include "sim.h"
+#include "Cache.h"
+#include "Constants.h"
+#include <bitset>
+#include <iostream>
+#include <math.h>
+#include <sstream>
+#include <iomanip>
+using namespace std;
 
 /*  "argc" holds the number of command-line arguments.
     "argv[]" holds the arguments themselves.
@@ -14,6 +22,45 @@
     argv[2] = "8192"
     ... and so on
 */
+
+void CreateAndLinkNewMemory(int memoryIndex, Memory*& topMemory, Memory* newMemory)
+{
+   Memory* temp = topMemory;
+   while (temp -> next != nullptr)
+   {
+        temp = temp->next;
+   }
+   newMemory -> prev = temp;
+   temp -> next = newMemory;
+}
+
+void CreateHierarchicalCachesAndMainMemory(Memory*& topMemory, CacheParameters* cacheParametersForCaches)
+{
+   if (CACHE_COUNT < 1)
+   {
+      return;
+   }
+   
+   for (int memoryIndex = 0; memoryIndex <= CACHE_COUNT; memoryIndex++){
+      if (memoryIndex == 0 || memoryIndex == CACHE_COUNT)
+      { 
+         if (topMemory == nullptr)
+         {
+            Cache* newCache = new Cache(cacheParametersForCaches[memoryIndex]);
+            topMemory = newCache;
+            continue;
+         }
+
+         MainMemory* mainMemory = new MainMemory(memoryIndex);
+         CreateAndLinkNewMemory(memoryIndex, topMemory, mainMemory);
+         continue;
+      }
+
+      Cache* newCache = new Cache(cacheParametersForCaches[memoryIndex]);
+      CreateAndLinkNewMemory(memoryIndex, topMemory, newCache);
+   }
+}
+
 int main (int argc, char *argv[]) {
    FILE *fp;			// File pointer.
    char *trace_file;		// This variable holds the trace file name.
@@ -23,6 +70,18 @@ int main (int argc, char *argv[]) {
 				// The header file <inttypes.h> above defines signed and unsigned integers of various sizes in a machine-agnostic way.  "uint32_t" is an unsigned integer of 32 bits.
 
    // Exit with an error if the number of command-line arguments is incorrect.
+   // argv = { "/sim.exe", "32", "8192", "4", "262144", "8", "3","10","/gcc_trace.txt"};
+   argv[0] = strdup("C:\\Users\\samch\\OneDrive\\Documents\\NCSU\\563\\Cache Project\\Cache-and-Memory-Hierarchy-Simulator\\sim.cc");
+   argv[1] = strdup("32");
+   argv[2] = strdup("8192");
+   argv[3] = strdup("4");
+   argv[4] = strdup("262144");
+   argv[5] = strdup("8");
+   argv[6] = strdup("3");
+   argv[7] = strdup("10");
+   argv[8] = strdup("C:\\Users\\samch\\OneDrive\\Documents\\NCSU\\563\\Cache Project\\Cache-and-Memory-Hierarchy-Simulator\\example_trace.txt");
+   argc = 9;
+
    if (argc != 9) {
       printf("Error: Expected 8 command-line arguments but was provided %d.\n", (argc - 1));
       exit(EXIT_FAILURE);
@@ -38,6 +97,25 @@ int main (int argc, char *argv[]) {
    params.PREF_M    = (uint32_t) atoi(argv[7]);
    trace_file       = argv[8];
 
+   CacheParameters* cacheParametersForCaches = new CacheParameters[CACHE_COUNT];
+   cacheParametersForCaches[0] = { 0, params.BLOCKSIZE ,params.L1_ASSOC, params.L1_SIZE };
+   cacheParametersForCaches[1] = { 1, params.BLOCKSIZE ,params.L2_ASSOC, params.L2_ASSOC };
+   
+   Memory* topMemory = nullptr;
+   CreateHierarchicalCachesAndMainMemory(topMemory, cacheParametersForCaches);
+
+      Memory* temp = topMemory;
+   while (temp->next != nullptr)
+   {
+      printf("%u->\n", temp -> memoryPosition);
+      temp = temp->next;
+    }
+    while (temp != nullptr)
+    {
+      printf("%u->\n", temp -> memoryPosition);
+      temp = temp->prev;
+    }
+   
    // Open the trace file for reading.
    fp = fopen(trace_file, "r");
    if (fp == (FILE *) NULL) {
@@ -60,18 +138,21 @@ int main (int argc, char *argv[]) {
 
    // Read requests from the trace file and echo them back.
    while (fscanf(fp, "%c %x\n", &rw, &addr) == 2) {	// Stay in the loop if fscanf() successfully parsed two tokens as specified.
-      if (rw == 'r')
-         printf("r %x\n", addr);
-      else if (rw == 'w')
-         printf("w %x\n", addr);
+      if (rw == 'r'){
+         // topMemory.readAddress(addr);
+      }
+      else if (rw == 'w'){
+         // printf("w %x\n", addr);
+         // uint32_t tag, indexBits;
+         // L1.splitBits(addr, tag, indexBits);
+      }
       else {
          printf("Error: Unknown request type %c.\n", rw);
 	 exit(EXIT_FAILURE);
       }
 
       ///////////////////////////////////////////////////////
-      // Issue the request to the L1 cache instance here.
-      ///////////////////////////////////////////////////////
+      
     }
 
     return(0);
