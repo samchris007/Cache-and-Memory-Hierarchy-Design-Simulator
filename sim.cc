@@ -72,14 +72,14 @@ int main (int argc, char *argv[]) {
    // Exit with an error if the number of command-line arguments is incorrect.
    // argv = { "/sim.exe", "32", "8192", "4", "262144", "8", "3","10","/gcc_trace.txt"};
    argv[0] = strdup("C:\\Users\\samch\\OneDrive\\Documents\\NCSU\\563\\Cache Project\\Cache-and-Memory-Hierarchy-Simulator\\sim.cc");
-   argv[1] = strdup("32");
-   argv[2] = strdup("8192");
-   argv[3] = strdup("4");
-   argv[4] = strdup("262144");
-   argv[5] = strdup("8");
-   argv[6] = strdup("3");
-   argv[7] = strdup("10");
-   argv[8] = strdup("C:\\Users\\samch\\OneDrive\\Documents\\NCSU\\563\\Cache Project\\Cache-and-Memory-Hierarchy-Simulator\\example_trace.txt");
+   argv[1] = strdup("16");
+   argv[2] = strdup("1024");
+   argv[3] = strdup("1");
+   argv[4] = strdup("0");
+   argv[5] = strdup("0");
+   argv[6] = strdup("0");
+   argv[7] = strdup("0");
+   argv[8] = strdup("C:\\Users\\samch\\OneDrive\\Documents\\NCSU\\563\\Cache Project\\Cache-and-Memory-Hierarchy-Simulator\\gcc_trace.txt");
    argc = 9;
 
    if (argc != 9) {
@@ -99,22 +99,14 @@ int main (int argc, char *argv[]) {
 
    CacheParameters* cacheParametersForCaches = new CacheParameters[CACHE_COUNT];
    cacheParametersForCaches[0] = { 0, params.BLOCKSIZE ,params.L1_ASSOC, params.L1_SIZE };
-   cacheParametersForCaches[1] = { 1, params.BLOCKSIZE ,params.L2_ASSOC, params.L2_ASSOC };
+
+   if (params.L2_ASSOC != 0 && params.L2_SIZE != 0)
+   {
+      cacheParametersForCaches[1] = { 1, params.BLOCKSIZE ,params.L2_ASSOC, params.L2_ASSOC };
+   }
    
    Memory* topMemory = nullptr;
    CreateHierarchicalCachesAndMainMemory(topMemory, cacheParametersForCaches);
-
-      Memory* temp = topMemory;
-   while (temp->next != nullptr)
-   {
-      printf("%u->\n", temp -> memoryPosition);
-      temp = temp->next;
-    }
-    while (temp != nullptr)
-    {
-      printf("%u->\n", temp -> memoryPosition);
-      temp = temp->prev;
-    }
    
    // Open the trace file for reading.
    fp = fopen(trace_file, "r");
@@ -139,7 +131,7 @@ int main (int argc, char *argv[]) {
    // Read requests from the trace file and echo them back.
    while (fscanf(fp, "%c %x\n", &rw, &addr) == 2) {	// Stay in the loop if fscanf() successfully parsed two tokens as specified.
       if (rw == 'r'){
-         // topMemory.readAddress(addr);
+         topMemory->ReadAddress(addr);
       }
       else if (rw == 'w'){
          // printf("w %x\n", addr);
@@ -150,9 +142,12 @@ int main (int argc, char *argv[]) {
          printf("Error: Unknown request type %c.\n", rw);
 	 exit(EXIT_FAILURE);
       }
-
-      ///////////////////////////////////////////////////////
       
+    }
+   
+    Memory* temp = topMemory;
+    while (temp->next != nullptr) {
+        temp = temp->next;
     }
 
     return(0);

@@ -4,16 +4,16 @@
 
 using namespace std;
 
-bool Cache::addressExists(uint32_t address) {
-    for (int i = 0; i < sets-1; ++i) {
-        for (int j = 0; j < associativity-1; ++j) {
-            if (cacheArray[i][j].tag == address) {
-                return true; // Element found
-            }
-        }
-    }
-    return false; // Element not found
-}
+// bool Cache::addressExists(uint32_t address) {
+//     for (int i = 0; i < sets-1; ++i) {
+//         for (int j = 0; j < associativity-1; ++j) {
+//             if (cacheArray[i][j].tag == address) {
+//                 return true; // Element found
+//             }
+//         }
+//     }
+//     return false; // Element not found
+// }
 
 // bool Cache::addressExistsByIndex(uint32_t tagAddress, uint32_t index) {
 //     for (int j = 0; j < associativity-1; ++j) {
