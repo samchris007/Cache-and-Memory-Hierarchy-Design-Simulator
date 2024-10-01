@@ -71,15 +71,15 @@ int main (int argc, char *argv[]) {
 
    // Exit with an error if the number of command-line arguments is incorrect.
    // argv = { "/sim.exe", "32", "8192", "4", "262144", "8", "3","10","/gcc_trace.txt"};
-   argv[0] = strdup("C:\\Users\\samch\\OneDrive\\Documents\\NCSU\\563\\Cache Project\\Cache-and-Memory-Hierarchy-Simulator\\sim.cc");
+   argv[0] = strdup("C:\\Users\\samch\\OneDrive\\Documents\\NCSU\\563\\Cache Project\\Cache-and-Memory-Hierarchy-Simulator\\src\\sim.cc");
    argv[1] = strdup("16");
    argv[2] = strdup("1024");
-   argv[3] = strdup("1");
-   argv[4] = strdup("0");
-   argv[5] = strdup("0");
+   argv[3] = strdup("2");
+   argv[4] = strdup("6144");
+   argv[5] = strdup("3");
    argv[6] = strdup("0");
    argv[7] = strdup("0");
-   argv[8] = strdup("C:\\Users\\samch\\OneDrive\\Documents\\NCSU\\563\\Cache Project\\Cache-and-Memory-Hierarchy-Simulator\\gcc_trace.txt");
+   argv[8] = strdup("C:\\Users\\samch\\OneDrive\\Documents\\NCSU\\563\\Cache Project\\Cache-and-Memory-Hierarchy-Simulator\\benchmarks\\gcc_trace.txt");
    argc = 9;
 
    if (argc != 9) {
@@ -102,7 +102,7 @@ int main (int argc, char *argv[]) {
 
    if (params.L2_ASSOC != 0 && params.L2_SIZE != 0)
    {
-      cacheParametersForCaches[1] = { 1, params.BLOCKSIZE ,params.L2_ASSOC, params.L2_ASSOC };
+      cacheParametersForCaches[1] = { 1, params.BLOCKSIZE ,params.L2_ASSOC, params.L2_SIZE };
    }
    
    Memory* topMemory = nullptr;
@@ -129,14 +129,14 @@ int main (int argc, char *argv[]) {
    printf("\n");
 
    // Read requests from the trace file and echo them back.
+   int i=0;
    while (fscanf(fp, "%c %x\n", &rw, &addr) == 2) {	// Stay in the loop if fscanf() successfully parsed two tokens as specified.
+      i++;
       if (rw == 'r'){
          topMemory->ReadAddress(addr);
       }
       else if (rw == 'w'){
-         // printf("w %x\n", addr);
-         // uint32_t tag, indexBits;
-         // L1.splitBits(addr, tag, indexBits);
+         topMemory->WriteAddress(addr);
       }
       else {
          printf("Error: Unknown request type %c.\n", rw);
@@ -147,6 +147,25 @@ int main (int argc, char *argv[]) {
    
     Memory* temp = topMemory;
     while (temp->next != nullptr) {
+      Cache* cache = dynamic_cast<Cache*>(temp);
+      if (cache)
+      {
+         for (int i = 0; i < cache->sets; i++)
+         {
+            for (int j = 0; j < cache->associativity; j++)
+            {
+               CacheElement cacheElement = cache->CacheArray[i][j];
+               printf("Tag: %x, Index: %u, Dirty Bit: %u \n", cacheElement.Tag, cacheElement.IndexBits, cacheElement.DirtyBit);
+            }
+         }
+         printf("L%u Cache\n\n", cache->memoryPosition);
+      }
+      else
+      {
+         MainMemory* mainMemory = dynamic_cast<MainMemory*>(temp);
+         printf("\n\nMemoryTraffic: %u", mainMemory->MemoryTraffic);
+      }
+      
         temp = temp->next;
     }
 
