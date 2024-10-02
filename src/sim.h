@@ -12,6 +12,14 @@ struct {
    uint32_t PREF_M;
 } cache_params_t;
 
+struct CacheParameters
+{
+    int CachePosition;
+    uint32_t BlockSize;
+    uint32_t Associativity;
+    uint32_t Size;
+};
+
 // Put additional data structures here as per your requirement.
 
 #endif

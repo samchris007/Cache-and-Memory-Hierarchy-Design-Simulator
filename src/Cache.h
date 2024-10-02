@@ -2,14 +2,7 @@
 #define CACHE_H
 
 #include <string>
-
-struct CacheParameters
-{
-    int CachePosition;
-    uint32_t BlockSize;
-    uint32_t Associativity;
-    uint32_t Size;
-};
+#include "memory.h"
 
 class CacheElement 
 {  
@@ -33,21 +26,6 @@ class CacheElement
                 DirtyBit = 1;
             }
         }
-};
-
-class Memory
-{
-    public:  
-        Memory* next;
-        Memory* prev;
-        int memoryPosition;
-
-        virtual uint32_t ReadAddress(uint32_t address)
-        {
-            return address;
-        }
-
-        virtual void WriteAddress(uint32_t address){}
 };
 
 class MainMemory : public Memory
@@ -74,7 +52,6 @@ class MainMemory : public Memory
         }
 };
 
-// Class declaration in the header file
 class Cache : public Memory {
     private:
         int blockSize;
@@ -163,7 +140,6 @@ class Cache : public Memory {
             writeBackToNextMemoryIfLRUBlockIsDirty(address, tag, index);
             uint32_t addressValue = next -> ReadAddress(address);
             updateTagInTheLRUBlock(address, tag, index, true);
-            return;
         }
 
     private:

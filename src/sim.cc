@@ -3,7 +3,7 @@
 #include <inttypes.h>
 #include "sim.h"
 #include "Cache.h"
-#include "Constants.h"
+#include "memory.h"
 #include <bitset>
 #include <iostream>
 #include <math.h>
@@ -23,7 +23,7 @@ using namespace std;
     ... and so on
 */
 
-void CreateAndLinkNewMemory(int memoryIndex, Memory*& topMemory, Memory* newMemory)
+void CreateAndLinkNewMemory(Memory*& topMemory, Memory* newMemory)
 {
    Memory* temp = topMemory;
    while (temp -> next != nullptr)
@@ -34,15 +34,15 @@ void CreateAndLinkNewMemory(int memoryIndex, Memory*& topMemory, Memory* newMemo
    temp -> next = newMemory;
 }
 
-void CreateHierarchicalCachesAndMainMemory(Memory*& topMemory, CacheParameters* cacheParametersForCaches)
+void CreateHierarchicalCachesAndMainMemory(int cacheCount, Memory*& topMemory, CacheParameters* cacheParametersForCaches)
 {
-   if (CACHE_COUNT < 1)
+   if (cacheCount < 1)
    {
       return;
    }
    
-   for (int memoryIndex = 0; memoryIndex <= CACHE_COUNT; memoryIndex++){
-      if (memoryIndex == 0 || memoryIndex == CACHE_COUNT)
+   for (int memoryIndex = 0; memoryIndex <= cacheCount; memoryIndex++){
+      if (memoryIndex == 0 || memoryIndex == cacheCount)
       { 
          if (topMemory == nullptr)
          {
@@ -51,14 +51,38 @@ void CreateHierarchicalCachesAndMainMemory(Memory*& topMemory, CacheParameters* 
             continue;
          }
 
-         MainMemory* mainMemory = new MainMemory(memoryIndex);
-         CreateAndLinkNewMemory(memoryIndex, topMemory, mainMemory);
+         int mainMemoryPosition = memoryIndex + 1;
+         MainMemory* mainMemory = new MainMemory(mainMemoryPosition);
+         CreateAndLinkNewMemory(topMemory, mainMemory);
          continue;
       }
 
       Cache* newCache = new Cache(cacheParametersForCaches[memoryIndex]);
-      CreateAndLinkNewMemory(memoryIndex, topMemory, newCache);
+      CreateAndLinkNewMemory(topMemory, newCache);
    }
+}
+
+void ShowOutputsOfMemoryHierarchy(Memory* topMemory)
+{
+   printf("==== Measurements ====\n\n");
+   Memory* temp = topMemory;
+   while (temp != nullptr)
+   {
+      Cache* cache = dynamic_cast<Cache*>(temp);
+      if (cache)
+      {
+         printf("L%u Reads: %u\n", cache->memoryPosition, cache->Read);
+         printf("L%u Read misses: %u\n", cache->memoryPosition, cache->ReadMiss);
+         printf("L%u writes: %u\n", cache->memoryPosition, cache->Write);
+         printf("L%u write misses: %u\n", cache->memoryPosition, cache->WriteMiss);
+         printf("L%u writebacks: %u\n", cache->memoryPosition, cache->WriteBack);
+         temp = temp->next;
+         continue;
+      }
+      MainMemory* mainMemory = dynamic_cast<MainMemory*>(temp);
+      printf("MemoryTraffic: %u \n", mainMemory->MemoryTraffic);
+      break;
+    }
 }
 
 int main (int argc, char *argv[]) {
@@ -72,7 +96,7 @@ int main (int argc, char *argv[]) {
    // Exit with an error if the number of command-line arguments is incorrect.
    // argv = { "/sim.exe", "32", "8192", "4", "262144", "8", "3","10","/gcc_trace.txt"};
    argv[0] = strdup("C:\\Users\\samch\\OneDrive\\Documents\\NCSU\\563\\Cache Project\\Cache-and-Memory-Hierarchy-Simulator\\src\\sim.cc");
-   argv[1] = strdup("16");
+   argv[1] = strdup("32");
    argv[2] = strdup("1024");
    argv[3] = strdup("2");
    argv[4] = strdup("6144");
@@ -97,16 +121,26 @@ int main (int argc, char *argv[]) {
    params.PREF_M    = (uint32_t) atoi(argv[7]);
    trace_file       = argv[8];
 
-   CacheParameters* cacheParametersForCaches = new CacheParameters[CACHE_COUNT];
-   cacheParametersForCaches[0] = { 0, params.BLOCKSIZE ,params.L1_ASSOC, params.L1_SIZE };
+   int cacheCount = 0;
+   if (argv[2] != 0)
+   {
+      cacheCount++;
+      if (argv[4] != 0)
+      {
+         cacheCount++;
+      }
+   }
+
+   CacheParameters* cacheParametersForCaches = new CacheParameters[cacheCount];
+   cacheParametersForCaches[0] = { 1, params.BLOCKSIZE ,params.L1_ASSOC, params.L1_SIZE };
 
    if (params.L2_ASSOC != 0 && params.L2_SIZE != 0)
    {
-      cacheParametersForCaches[1] = { 1, params.BLOCKSIZE ,params.L2_ASSOC, params.L2_SIZE };
+      cacheParametersForCaches[1] = { 2, params.BLOCKSIZE ,params.L2_ASSOC, params.L2_SIZE };
    }
    
    Memory* topMemory = nullptr;
-   CreateHierarchicalCachesAndMainMemory(topMemory, cacheParametersForCaches);
+   CreateHierarchicalCachesAndMainMemory(cacheCount, topMemory, cacheParametersForCaches);
    
    // Open the trace file for reading.
    fp = fopen(trace_file, "r");
@@ -128,46 +162,23 @@ int main (int argc, char *argv[]) {
    printf("trace_file: %s\n", trace_file);
    printf("\n");
 
-   // Read requests from the trace file and echo them back.
-   int i=0;
-   while (fscanf(fp, "%c %x\n", &rw, &addr) == 2) {	// Stay in the loop if fscanf() successfully parsed two tokens as specified.
-      i++;
-      if (rw == 'r'){
+   while (fscanf(fp, "%c %x\n", &rw, &addr) == 2)
+   {
+      if (rw == 'r')
+      {
          topMemory->ReadAddress(addr);
       }
-      else if (rw == 'w'){
-         topMemory->WriteAddress(addr);
-      }
-      else {
-         printf("Error: Unknown request type %c.\n", rw);
-	 exit(EXIT_FAILURE);
-      }
-      
-    }
-   
-    Memory* temp = topMemory;
-    while (temp->next != nullptr) {
-      Cache* cache = dynamic_cast<Cache*>(temp);
-      if (cache)
+      else if (rw == 'w')
       {
-         for (int i = 0; i < cache->sets; i++)
-         {
-            for (int j = 0; j < cache->associativity; j++)
-            {
-               CacheElement cacheElement = cache->CacheArray[i][j];
-               printf("Tag: %x, Index: %u, Dirty Bit: %u \n", cacheElement.Tag, cacheElement.IndexBits, cacheElement.DirtyBit);
-            }
-         }
-         printf("L%u Cache\n\n", cache->memoryPosition);
+         topMemory->WriteAddress(addr);
       }
       else
       {
-         MainMemory* mainMemory = dynamic_cast<MainMemory*>(temp);
-         printf("\n\nMemoryTraffic: %u", mainMemory->MemoryTraffic);
+         printf("Error: Unknown request type %c.\n", rw);
+	      exit(EXIT_FAILURE);
       }
-      
-        temp = temp->next;
-    }
-
-    return(0);
+   }
+   
+   ShowOutputsOfMemoryHierarchy(topMemory);
+   return(0);
 }
