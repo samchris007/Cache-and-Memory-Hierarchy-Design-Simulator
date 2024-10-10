@@ -18,6 +18,9 @@ struct CacheParameters
     uint32_t BlockSize;
     uint32_t Associativity;
     uint32_t Size;
+    uint32_t prefetchM;
+    uint32_t prefetchN;
+    bool PrefetchUnitExists;
 };
 
 // Put additional data structures here as per your requirement.

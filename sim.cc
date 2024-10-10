@@ -28,10 +28,28 @@ void CreateAndLinkNewMemory(Memory*& topMemory, Memory* newMemory)
    Memory* temp = topMemory;
    while (temp -> next != nullptr)
    {
-        temp = temp->next;
+      temp = temp->next;
    }
    newMemory -> prev = temp;
    temp -> next = newMemory;
+}
+
+void CreateAndLinkPrefetchUnit(Memory*& topMemory, CacheParameters& cacheParameters)
+{
+   Memory* temp = topMemory;
+   while (temp -> next != nullptr)
+   {
+      Cache* cache = dynamic_cast<Cache*>(temp);
+      if (temp->next->next == nullptr && cache)
+      {
+         PrefetchUnit* cachePrefetchUnit = new PrefetchUnit(cacheParameters.prefetchM, cacheParameters.prefetchN, cache->blockSize, cache->size, cache->associativity);
+         // Link cache and main memory to the prefetch unit.
+         temp -> prefetchUnit = cachePrefetchUnit;
+         cachePrefetchUnit -> prev = temp;
+         cachePrefetchUnit -> next = temp -> next;
+      }
+      temp = temp->next;
+   }
 }
 
 void CreateHierarchicalCachesAndMainMemory(int cacheCount, Memory*& topMemory, CacheParameters* cacheParametersForCaches)
@@ -54,6 +72,7 @@ void CreateHierarchicalCachesAndMainMemory(int cacheCount, Memory*& topMemory, C
          int mainMemoryPosition = memoryIndex + 1;
          MainMemory* mainMemory = new MainMemory(mainMemoryPosition);
          CreateAndLinkNewMemory(topMemory, mainMemory);
+         CreateAndLinkPrefetchUnit(topMemory, cacheParametersForCaches[memoryIndex-1]);
          continue;
       }
 
@@ -84,7 +103,13 @@ CacheElement* bubbleSort(CacheElement cacheArray[], int n) {
 void ShowMemoryContents(Memory* topMemory)
 {
    Memory* temp = topMemory;
-   printf("\n");
+   PrefetchUnit* prefetchUnit = dynamic_cast<PrefetchUnit*>(temp->prefetchUnit);
+   PrefetchUnit* l2PrefetchUnit = nullptr;
+   if (!prefetchUnit)
+   {
+      l2PrefetchUnit = dynamic_cast<PrefetchUnit*>(temp->next->prefetchUnit);
+      prefetchUnit = l2PrefetchUnit;
+   }
    while (temp -> next != nullptr)
    {
       Cache* cache = dynamic_cast<Cache*>(temp);
@@ -92,7 +117,11 @@ void ShowMemoryContents(Memory* topMemory)
       {
          break;
       }
-      printf("\n===== L%u contents =====\n", cache->memoryPosition);
+      if (cache->memoryPosition == 2)
+      {
+         printf("\n");
+      }
+      printf("===== L%u contents =====\n", cache->memoryPosition);
       for (int setIndex = 0; setIndex < cache->sets; ++setIndex) 
       {
          printf("set% *d:", 7, setIndex);
@@ -107,61 +136,58 @@ void ShowMemoryContents(Memory* topMemory)
             }
             printf("     ");
          }
-         if (cache->memoryPosition == 2 && setIndex == cache->sets-1)
-         {
-            continue;
-         }
          printf("\n");
       }
       temp = temp->next;
    }
-}
-
-char intToLowercaseChar(int num) {
-    if (num < 1 || num > 26) {
-        throw std::out_of_range("Input must be between 1 and 26");
-    }
-    return 'a' + (num - 1);
+   if (prefetchUnit && prefetchUnit->streamBuffersCount != 0)
+      {
+         printf("\n===== Stream Buffer(s) contents =====\n");
+         for (int i = 0; i < prefetchUnit->streamBuffersCount; i++)
+         {
+            for (int j = 0; j < prefetchUnit->streamBufferElementsCount; j++)
+            {
+               printf("%x ", prefetchUnit->streamBuffers[i]->Stream.front().TagAndIndex);
+               prefetchUnit->streamBuffers[i]->Stream.pop();
+            }
+            printf("\n");
+         }
+      }
 }
 
 void ShowOutputsOfMemoryHierarchy(Memory* topMemory)
 {
-   printf("===== Measurements =====\n");
    Memory* temp = topMemory;
-   int alphabetEquivalentNumber = 1;
-   while (temp != nullptr)
+   PrefetchUnit* l2PrefetchUnit = nullptr;
+   MainMemory* mainMemoryInL2 = nullptr;
+   Cache* L1 = dynamic_cast<Cache*>(temp);
+   Cache* L2 = dynamic_cast<Cache*>(temp -> next);
+   PrefetchUnit* l1PrefetchUnit = dynamic_cast<PrefetchUnit*>(L1->prefetchUnit);
+   MainMemory* mainMemoryInL1 = dynamic_cast<MainMemory*>(temp->next);
+   if (L2)
    {
-      Cache* cache = dynamic_cast<Cache*>(temp);
-      string demandString = "";
-      if (cache && cache->memoryPosition >= 2)
-      {
-         printf("%c. L%u reads (demand): %11u\n", intToLowercaseChar(alphabetEquivalentNumber++), cache->memoryPosition, cache->Read);
-         printf("%c. L%u read misses (demand): %5u\n",intToLowercaseChar(alphabetEquivalentNumber++), cache->memoryPosition, cache->ReadMiss);
-         printf("%c. L%u reads (prefetch): %9u\n", intToLowercaseChar(alphabetEquivalentNumber++), cache->memoryPosition, 0);
-         printf("%c. L%u read misses (prefetch): %3u\n",intToLowercaseChar(alphabetEquivalentNumber++), cache->memoryPosition, 0);
-         printf("%c. L%u writes: %19u\n", intToLowercaseChar(alphabetEquivalentNumber++), cache->memoryPosition, cache->Write);
-         printf("%c. L%u write misses: %13u\n", intToLowercaseChar(alphabetEquivalentNumber++), cache->memoryPosition, cache->WriteMiss);
-         printf("%c. L%u miss rate: %16.4f\n", intToLowercaseChar(alphabetEquivalentNumber++), cache->memoryPosition, cache->GetMissRate());
-         printf("%c. L%u writebacks: %15u\n", intToLowercaseChar(alphabetEquivalentNumber++), cache->memoryPosition, cache->WriteBack);
-         printf("%c. L%u prefetches: %15u\n", intToLowercaseChar(alphabetEquivalentNumber++), cache->memoryPosition, 0);
-         temp = temp->next;
-      }
-      else if (cache && cache->memoryPosition == 1)
-      {
-         printf("%c. L%u reads: %20u\n", intToLowercaseChar(alphabetEquivalentNumber++), cache->memoryPosition, cache->Read);
-         printf("%c. L%u Read misses: %14u\n",intToLowercaseChar(alphabetEquivalentNumber++), cache->memoryPosition, cache->ReadMiss);
-         printf("%c. L%u writes: %19u\n", intToLowercaseChar(alphabetEquivalentNumber++), cache->memoryPosition, cache->Write);
-         printf("%c. L%u write misses: %13u\n", intToLowercaseChar(alphabetEquivalentNumber++), cache->memoryPosition, cache->WriteMiss);
-         printf("%c. L%u miss rate: %16.4f\n", intToLowercaseChar(alphabetEquivalentNumber++), cache->memoryPosition, cache->GetMissRate());
-         printf("%c. L%u writebacks: %15u\n", intToLowercaseChar(alphabetEquivalentNumber++), cache->memoryPosition, cache->WriteBack);
-         printf("%c. L%u prefetches: %15u\n", intToLowercaseChar(alphabetEquivalentNumber++), cache->memoryPosition, 0);
-         temp = temp->next;
-         continue;
-      }
-      MainMemory* mainMemory = dynamic_cast<MainMemory*>(temp);
-      printf("%c. memory traffic: %14u \n", intToLowercaseChar(alphabetEquivalentNumber++), mainMemory->MemoryTraffic);
-      break;
-    }
+      mainMemoryInL2 = dynamic_cast<MainMemory*>(temp->next->next);
+      l2PrefetchUnit = dynamic_cast<PrefetchUnit*>(L2->prefetchUnit);
+   }
+
+   printf("\n===== Measurements =====\n");
+   printf("a. L1 reads: %20u\n", L1->Read);
+   printf("b. L1 Read misses: %14u\n", L1->ReadMiss);
+   printf("c. L1 writes: %19u\n", L1->Write);
+   printf("d. L1 write misses: %13u\n", L1->WriteMiss);
+   printf("e. L1 miss rate: %16.4f\n", L1->GetMissRate());
+   printf("f. L1 writebacks: %15u\n", L1->WriteBack);
+   printf("g. L1 prefetches: %15u\n", l1PrefetchUnit ? l1PrefetchUnit->Prefetches : 0);
+   printf("h. L2 reads (demand): %11u\n", L2 ? L2->Read : 0);
+   printf("i. L2 read misses (demand): %5u\n",L2 ? L2->ReadMiss : 0);
+   printf("j. L2 reads (prefetch): %9u\n", 0);
+   printf("k. L2 read misses (prefetch): %3u\n", 0);
+   printf("l. L2 writes: %19u\n", L2 ? L2->Write : 0);
+   printf("m. L2 write misses: %13u\n", L2 ? L2->WriteMiss : 0);
+   printf("n. L2 miss rate: %16.4f\n", L2 ? L2->GetMissRate() : 0);
+   printf("o. L2 writebacks: %15u\n", L2? L2->WriteBack : 0);
+   printf("p. L2 prefetches: %15u\n", l2PrefetchUnit ? l2PrefetchUnit->Prefetches : 0);
+   printf("q. memory traffic: %14u \n", mainMemoryInL1 ? mainMemoryInL1->MemoryTraffic : mainMemoryInL2->MemoryTraffic);
 }
 
 int main (int argc, char *argv[]) {
@@ -178,8 +204,8 @@ int main (int argc, char *argv[]) {
    // argv[1] = strdup("16");
    // argv[2] = strdup("1024");
    // argv[3] = strdup("1");
-   // argv[4] = strdup("12288");
-   // argv[5] = strdup("6");
+   // argv[4] = strdup("0");
+   // argv[5] = strdup("0");
    // argv[6] = strdup("0");
    // argv[7] = strdup("0");
    // argv[8] = strdup("C:\\Users\\samch\\OneDrive\\Documents\\NCSU\\563\\Cache Project\\Cache-and-Memory-Hierarchy-Simulator\\benchmarks\\gcc_trace.txt");
@@ -211,11 +237,13 @@ int main (int argc, char *argv[]) {
    }
 
    CacheParameters* cacheParametersForCaches = new CacheParameters[cacheCount];
-   cacheParametersForCaches[0] = { 1, params.BLOCKSIZE ,params.L1_ASSOC, params.L1_SIZE };
+   bool prefetchExistsInL1 = cacheCount == 1 && params.PREF_M != 0 || params.PREF_N != 0 ? true : false;
+   cacheParametersForCaches[0] = { 1, params.BLOCKSIZE ,params.L1_ASSOC, params.L1_SIZE, params.PREF_M, params.PREF_N, prefetchExistsInL1 };
 
    if (params.L2_ASSOC != 0 && params.L2_SIZE != 0)
    {
-      cacheParametersForCaches[1] = { 2, params.BLOCKSIZE ,params.L2_ASSOC, params.L2_SIZE };
+      bool prefetchExistsInL2 = cacheCount == 2 && params.PREF_M != 0 || params.PREF_N != 0 ? true : false;
+      cacheParametersForCaches[1] = { 2, params.BLOCKSIZE ,params.L2_ASSOC, params.L2_SIZE, params.PREF_M, params.PREF_N, prefetchExistsInL2 };
    }
    
    Memory* topMemory = nullptr;

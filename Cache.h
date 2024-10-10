@@ -3,8 +3,11 @@
 
 #include <string>
 #include <math.h>
+#include <queue>
 #include "memory.h"
+#include "mainmemory.h"
 #include "sim.h"
+#include "helpers.h"
 
 using namespace std;
 
@@ -14,15 +17,17 @@ class CacheElement
         uint32_t Tag = 0;
         uint32_t Address = 0;
         uint32_t IndexBits = 0;
+        uint32_t TagAndIndex = 0;
         int ValidBit = 0;
         int DirtyBit = 0;
         int Counter;
 
-        void SetValues(uint32_t address, uint32_t tag, uint32_t index, bool isWriteOperation)
+        void SetValues(uint32_t address, uint32_t tag, uint32_t index, uint32_t tagAndIndex, bool isWriteOperation)
         {
             Tag = tag;
             IndexBits = index;
             Address = address;
+            TagAndIndex = tagAndIndex;
             ValidBit = 1;
             
             if (isWriteOperation)
@@ -32,36 +37,210 @@ class CacheElement
         }
 };
 
-class MainMemory : public Memory
+struct StreamBufferElement
+{
+    uint32_t TagAndIndex;
+};
+
+class StreamBuffer
 {
     public:
-        MainMemory(int position)
+        int ValidBit = 0;
+        int Counter;
+        unsigned long& Prefetches;
+        queue<StreamBufferElement> Stream;
+
+        StreamBuffer(int count, int cacheBlockSize, int streamBufferSets, unsigned long& prefetches) : Prefetches(prefetches)
         {
-            memoryPosition = position;
-            this -> next = nullptr;
-            this -> prev = nullptr;
+            elementsCount = count;
+            Prefetches = prefetches;
+            blockSize = cacheBlockSize;
+            sets = streamBufferSets;
+            indexBitsCount = log2(sets);
         }
 
-        int MemoryTraffic = 0;
-        
-        uint32_t ReadAddress(uint32_t address) override
+        void SetValues(uint32_t address, Memory* mainMemory)
         {
-            MemoryTraffic++;
-            return address;
+            uint32_t tag, index, tagAndIndex;
+            Helpers::splitBits(address, blockSize, sets, tag, index, tagAndIndex);
+            queue<StreamBufferElement> tempStream = Stream;
+            ClearValues();
+
+            for (int m = 1; m <= elementsCount; ++m)
+            {
+                uint32_t newTagAndIndex = tagAndIndex + m;
+                StreamBufferElement element = StreamBufferElement();
+                element.TagAndIndex = newTagAndIndex;
+                Stream.push(element);
+            }
+
+            if (TagAndIndexExistsInStream(tagAndIndex, tempStream))
+            {
+                int elementIndex = GetStreamIndexofAddress(tagAndIndex, tempStream);
+                int elementsRemoved = elementIndex+1;
+                Prefetches = Prefetches + elementsRemoved;
+                for (int i = 0; i < elementsRemoved; i++)
+                {
+                    mainMemory->ReadAddress(address);
+                }
+            }
+            else
+            {
+                Prefetches = Prefetches + elementsCount;
+                for (int i = 0; i < elementsCount; i++)
+                {
+                    mainMemory->ReadAddress(address);
+                }
+            }
         }
-        
-        void WriteAddress(uint32_t address) override
+
+        void GetNewAddress(uint32_t& address, uint32_t& tag, uint32_t& indexBits, uint32_t& tagAndIndex, int count) 
         {
-            MemoryTraffic++;
+            uint32_t offsetBitsCount = log2(blockSize);
+            uint32_t offsetMask = (1 << offsetBitsCount) - 1;
+            uint32_t offsetBits = address & offsetMask;
+            uint32_t mask = (1 << indexBitsCount) - 1;
+            tagAndIndex = (address >> offsetBitsCount) + count;
+
+            indexBits = tagAndIndex & mask;
+            tag = tagAndIndex >> indexBitsCount;
+            address = (tagAndIndex << offsetBitsCount) | offsetBits;
+        }
+
+        bool TagAndIndexExistsInStream(uint32_t tagAndIndex, queue<StreamBufferElement> stream)
+        {
+            queue<StreamBufferElement> tempQueue = stream;
+
+            while (!tempQueue.empty()) 
+            {
+                if (tempQueue.front().TagAndIndex == tagAndIndex)
+                {
+                    return true;
+                }
+                tempQueue.pop();
+            }
+            return false;
+        }
+
+        int GetStreamIndexofAddress(uint32_t tagAndIndex, queue<StreamBufferElement> stream)
+        {
+            int elementIndex = 0;
+            queue<StreamBufferElement> tempQueue = stream;
+
+            while (!tempQueue.empty()) 
+            {
+                if (tempQueue.front().TagAndIndex == tagAndIndex)
+                {
+                    return elementIndex;
+                }
+                tempQueue.pop();
+                elementIndex++;
+            }
+            return elementIndex;
+        }
+
+    private:
+        int elementsCount = 0;
+        int blockSize = 0;
+        int sets = 0;
+        int indexBitsCount;
+
+        void ClearValues()
+        {
+            while (!Stream.empty())
+            {
+                Stream.pop();
+            }
         }
 };
 
-class Cache : public Memory {
-    private:
-        int blockSize;
-        int size;
+
+class PrefetchUnit : public Memory
+{
+    public:
+        StreamBuffer** streamBuffers;
+        unsigned long Prefetches = 0;
+        int streamBuffersCount = 0;
+        int streamBufferElementsCount = 0;
 
     public:
+        PrefetchUnit(const int mCount, const int nCount, int cacheBlockSize, int cacheSize, int associativity)
+        {
+            streamBufferElementsCount = mCount;
+            streamBuffersCount = nCount;
+            blockSize = cacheBlockSize;
+            sets = cacheSize / (blockSize * associativity);
+            streamBuffers = new StreamBuffer*[streamBuffersCount];
+
+            for (int i = 0; i < nCount; ++i) {
+                streamBuffers[i] = new StreamBuffer(mCount, blockSize, sets, Prefetches);
+                streamBuffers[i]->Counter = i;
+            }
+
+            this->next = nullptr;
+            this->prev = nullptr;
+        }
+
+        bool TryGetIndexFromStreamBuffer(uint32_t address, int &streamBufferIndex) override
+        {
+            uint32_t tag, index, tagAndIndex;
+            Helpers::splitBits(address, blockSize, sets, tag, index, tagAndIndex);
+            streamBufferIndex = streamBuffersCount-1;
+            bool isHit = false;
+            for (int i = 0; i < streamBuffersCount; ++i)
+            {
+                if (streamBuffers[i]->TagAndIndexExistsInStream(tagAndIndex, streamBuffers[i]->Stream))
+                {
+                    if (streamBuffers[i]->Counter <= streamBufferIndex)
+                    {
+                        streamBufferIndex = streamBuffers[i]->Counter;
+                    }
+                    isHit = true;
+                }
+            }
+            return isHit;
+        }
+
+        void SetValuesToStreamBuffer(uint32_t address, int streamBufferIndex) override
+        {
+            streamBuffers[streamBufferIndex]->SetValues(address, next);
+            incrementCounterValuesToStreamBuffers(streamBufferIndex);
+        }
+
+        void updateElementsInTheLRUStreamBuffer(uint32_t address) override
+        {
+            int lruElementCounter = streamBuffersCount-1;
+            for (int i = 0; i < streamBuffersCount; ++i) 
+            {
+                if (streamBuffers[i]->Counter == lruElementCounter)
+                {
+                    SetValuesToStreamBuffer(address, i);
+                    return;
+                }
+            }
+        }
+
+        void incrementCounterValuesToStreamBuffers(int indexOfReadStreamBuffer)
+        {
+            for (int i = 0; i < streamBuffersCount; ++i)
+            {
+                if (streamBuffers[i]->Counter < streamBuffers[indexOfReadStreamBuffer]->Counter)
+                {
+                    streamBuffers[i]->Counter++;
+                }
+             }
+            streamBuffers[indexOfReadStreamBuffer]->Counter = 0;
+        }
+
+    private:
+        int blockSize;
+        int sets;
+};
+
+class Cache : public Memory {
+    public:
+        int blockSize;
+        int size;
         int sets;
         int associativity;
         CacheElement **CacheArray;
@@ -104,20 +283,36 @@ class Cache : public Memory {
         {
             uint32_t tag = 0;
             uint32_t index = 0;
+            uint32_t tagAndIndex = 0;
             int assocIndex = 0;
             
             Read++;
-            splitBits(address, tag, index);
+            Helpers::splitBits(address, blockSize, sets, tag, index, tagAndIndex);
             if (addressExistsByIndex(tag, index, assocIndex))
             {
                 ReadHit++;
                 incrementCounterValuesToCacheElements(index, assocIndex);
                 CacheArray[index][assocIndex].Counter = 0;
+                if (prefetchUnit)
+                {
+                    TryGetAddressFromPrefetcher(address);
+                }
                 return address;
             }
 
-            ReadMiss++;
             writeBackToNextMemoryIfLRUBlockIsDirty(address, tag, index);
+            if (TryGetAddressFromPrefetcher(address))
+            {
+                updateTagInTheLRUBlock(address, tag, index, false);
+                return address;
+            }
+            
+            if (prefetchUnit)
+            {
+                prefetchUnit->updateElementsInTheLRUStreamBuffer(address);
+            }
+
+            ReadMiss++;
             uint32_t addressValue = next -> ReadAddress(address);
             updateTagInTheLRUBlock(address, tag, index, false);
             return addressValue;
@@ -127,21 +322,38 @@ class Cache : public Memory {
         {
             uint32_t tag = 0;
             uint32_t index = 0;
+            uint32_t tagAndIndex = 0;
             int assocIndex = 0;
             
             Write++;
-            splitBits(address, tag, index);
+            Helpers::splitBits(address, blockSize, sets, tag, index, tagAndIndex);
             if (addressExistsByIndex(tag, index, assocIndex))
-            {
+            {  
+                int streamBufferIndex;
+
                 WriteHit++;
                 incrementCounterValuesToCacheElements(index, assocIndex);
                 CacheArray[index][assocIndex].Counter = 0;
                 CacheArray[index][assocIndex].DirtyBit = 1;
+                if (prefetchUnit)
+                {
+                    TryGetAddressFromPrefetcher(address);
+                }
                 return;
             }
 
-            WriteMiss++;
             writeBackToNextMemoryIfLRUBlockIsDirty(address, tag, index);
+            if (TryGetAddressFromPrefetcher(address))
+            {
+                updateTagInTheLRUBlock(address, tag, index, true);
+                return;
+            }
+            
+            if (prefetchUnit)
+            {
+                prefetchUnit->updateElementsInTheLRUStreamBuffer(address);
+            }
+            WriteMiss++;
             next -> ReadAddress(address);
             updateTagInTheLRUBlock(address, tag, index, true);
         }
@@ -165,6 +377,17 @@ class Cache : public Memory {
                 {
                     return true;
                 }
+            }
+            return false;
+        }
+
+        bool TryGetAddressFromPrefetcher(uint32_t address)
+        {
+            int streamBufferIndex = 0;
+            if (prefetchUnit && prefetchUnit->TryGetIndexFromStreamBuffer(address, streamBufferIndex))
+            {
+                prefetchUnit->SetValuesToStreamBuffer(address, streamBufferIndex);
+                return true;
             }
             return false;
         }
@@ -211,22 +434,13 @@ class Cache : public Memory {
 
         void storeAddressInCacheSet(int index, int assocIndexOfReadValue, uint32_t address, uint32_t tag, bool isWriteOperation)
         {
+            uint32_t indexBits, tagAndIndex;
             incrementCounterValuesToCacheElements(index, assocIndexOfReadValue);
+            Helpers::splitBits(address, blockSize, sets, tag, indexBits, tagAndIndex);
             CacheElement newCacheElement = CacheElement();
-            newCacheElement.SetValues(address, tag, index, isWriteOperation);
+            newCacheElement.SetValues(address, tag, index, tagAndIndex, isWriteOperation);
             newCacheElement.Counter = 0;
             CacheArray[index][assocIndexOfReadValue] = newCacheElement;
-        }
-
-        void splitBits(const uint32_t address, uint32_t& tag, uint32_t& indexBits) 
-        {
-            uint32_t offsetBitsCount = log2(blockSize);
-            uint32_t indexBitsCount = log2(sets);
-            uint32_t tagAndIndex = address >> offsetBitsCount;
-            uint32_t mask = (1 << indexBitsCount) - 1;
-
-            indexBits = tagAndIndex & mask;
-            tag = tagAndIndex >> indexBitsCount;
         }
 
         void writeBackToNextMemoryIfLRUBlockIsDirty(uint32_t address, uint32_t tag, int index)
