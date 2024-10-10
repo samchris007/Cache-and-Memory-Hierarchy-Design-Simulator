@@ -81,15 +81,9 @@ void CreateHierarchicalCachesAndMainMemory(int cacheCount, Memory*& topMemory, C
    }
 }
 
-
-
-// Function to implement Bubble Sort
 CacheElement* bubbleSort(CacheElement cacheArray[], int n) {
-    // Loop through all array elements
     for (int i = 0; i < n - 1; i++) {
-        // Last i elements are already in place
         for (int j = 0; j < n - i - 1; j++) {
-            // Swap if the element is greater than the next element
             if (cacheArray[j].Counter > cacheArray[j + 1].Counter) {
                 CacheElement temp = cacheArray[j];
                 cacheArray[j] = cacheArray[j + 1];
@@ -141,18 +135,18 @@ void ShowMemoryContents(Memory* topMemory)
       temp = temp->next;
    }
    if (prefetchUnit && prefetchUnit->streamBuffersCount != 0)
+   {
+      printf("\n===== Stream Buffer(s) contents =====\n");
+      for (int i = 0; i < prefetchUnit->streamBuffersCount; i++)
       {
-         printf("\n===== Stream Buffer(s) contents =====\n");
-         for (int i = 0; i < prefetchUnit->streamBuffersCount; i++)
+         for (int j = 0; j < prefetchUnit->streamBufferElementsCount; j++)
          {
-            for (int j = 0; j < prefetchUnit->streamBufferElementsCount; j++)
-            {
-               printf("%x ", prefetchUnit->streamBuffers[i]->Stream.front().TagAndIndex);
-               prefetchUnit->streamBuffers[i]->Stream.pop();
-            }
-            printf("\n");
+            printf("%x ", prefetchUnit->streamBuffers[i]->Stream.front().TagAndIndex);
+            prefetchUnit->streamBuffers[i]->Stream.pop();
          }
+         printf("\n");
       }
+   }
 }
 
 void ShowOutputsOfMemoryHierarchy(Memory* topMemory)
@@ -200,16 +194,16 @@ int main (int argc, char *argv[]) {
 
    // Exit with an error if the number of command-line arguments is incorrect.
    // argv = { "/sim.exe", "32", "8192", "4", "262144", "8", "3","10","/gcc_trace.txt"};
-   // argv[0] = strdup("C:\\Users\\samch\\OneDrive\\Documents\\NCSU\\563\\Cache Project\\Cache-and-Memory-Hierarchy-Simulator\\sim.cc");
-   // argv[1] = strdup("16");
-   // argv[2] = strdup("1024");
-   // argv[3] = strdup("1");
-   // argv[4] = strdup("0");
-   // argv[5] = strdup("0");
-   // argv[6] = strdup("0");
-   // argv[7] = strdup("0");
-   // argv[8] = strdup("C:\\Users\\samch\\OneDrive\\Documents\\NCSU\\563\\Cache Project\\Cache-and-Memory-Hierarchy-Simulator\\benchmarks\\gcc_trace.txt");
-   // argc = 9;
+   argv[0] = strdup("C:\\Users\\samch\\OneDrive\\Documents\\NCSU\\563\\Cache Project\\Cache-and-Memory-Hierarchy-Simulator\\sim.cc");
+   argv[1] = strdup("16");
+   argv[2] = strdup("1024");
+   argv[3] = strdup("1");
+   argv[4] = strdup("8192");
+   argv[5] = strdup("4");
+   argv[6] = strdup("3");
+   argv[7] = strdup("4");
+   argv[8] = strdup("C:\\Users\\samch\\OneDrive\\Documents\\NCSU\\563\\Cache Project\\Cache-and-Memory-Hierarchy-Simulator\\benchmarks\\gcc_trace.txt");
+   argc = 9;
 
    if (argc != 9) {
       printf("Error: Expected 8 command-line arguments but was provided %d.\n", (argc - 1));

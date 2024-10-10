@@ -94,19 +94,6 @@ class StreamBuffer
             }
         }
 
-        void GetNewAddress(uint32_t& address, uint32_t& tag, uint32_t& indexBits, uint32_t& tagAndIndex, int count) 
-        {
-            uint32_t offsetBitsCount = log2(blockSize);
-            uint32_t offsetMask = (1 << offsetBitsCount) - 1;
-            uint32_t offsetBits = address & offsetMask;
-            uint32_t mask = (1 << indexBitsCount) - 1;
-            tagAndIndex = (address >> offsetBitsCount) + count;
-
-            indexBits = tagAndIndex & mask;
-            tag = tagAndIndex >> indexBitsCount;
-            address = (tagAndIndex << offsetBitsCount) | offsetBits;
-        }
-
         bool TagAndIndexExistsInStream(uint32_t tagAndIndex, queue<StreamBufferElement> stream)
         {
             queue<StreamBufferElement> tempQueue = stream;
@@ -154,7 +141,6 @@ class StreamBuffer
         }
 };
 
-
 class PrefetchUnit : public Memory
 {
     public:
@@ -185,15 +171,16 @@ class PrefetchUnit : public Memory
         {
             uint32_t tag, index, tagAndIndex;
             Helpers::splitBits(address, blockSize, sets, tag, index, tagAndIndex);
-            streamBufferIndex = streamBuffersCount-1;
+            int streamBufferMaxCounter = streamBuffersCount-1;
             bool isHit = false;
             for (int i = 0; i < streamBuffersCount; ++i)
             {
                 if (streamBuffers[i]->TagAndIndexExistsInStream(tagAndIndex, streamBuffers[i]->Stream))
                 {
-                    if (streamBuffers[i]->Counter <= streamBufferIndex)
+                    if (streamBuffers[i]->Counter <= streamBufferMaxCounter)
                     {
-                        streamBufferIndex = streamBuffers[i]->Counter;
+                        streamBufferMaxCounter = streamBuffers[i]->Counter;
+                        streamBufferIndex = i;
                     }
                     isHit = true;
                 }
