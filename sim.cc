@@ -1,7 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <inttypes.h>
-#include "Cache.h"
+#include "src/cache.h"
+#include "src/prefetch_unit.h"
 #include "sim.h"
 #include "memory.h"
 #include <bitset>
@@ -206,13 +207,13 @@ int main (int argc, char *argv[]) {
    // Exit with an error if the number of command-line arguments is incorrect.
    // argv = { "/sim.exe", "32", "8192", "4", "262144", "8", "3","10","/gcc_trace.txt"};
    // argv[0] = strdup("C:\\Users\\samch\\OneDrive\\Documents\\NCSU\\563\\Cache Project\\Cache-and-Memory-Hierarchy-Simulator\\sim.cc");
-   // argv[1] = strdup("16");
-   // argv[2] = strdup("1024");
-   // argv[3] = strdup("1");
-   // argv[4] = strdup("8192");
-   // argv[5] = strdup("4");
-   // argv[6] = strdup("3");
-   // argv[7] = strdup("4");
+   // argv[1] = strdup("32");
+   // argv[2] = strdup("8192");
+   // argv[3] = strdup("4");
+   // argv[4] = strdup("65536");
+   // argv[5] = strdup("8");
+   // argv[6] = strdup("0");
+   // argv[7] = strdup("0");
    // argv[8] = strdup("C:\\Users\\samch\\OneDrive\\Documents\\NCSU\\563\\Cache Project\\Cache-and-Memory-Hierarchy-Simulator\\benchmarks\\gcc_trace.txt");
    // argc = 9;
 

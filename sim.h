@@ -23,6 +23,11 @@ struct CacheParameters
     bool PrefetchUnitExists;
 };
 
+struct StreamBufferElement
+{
+    uint32_t TagAndIndex;
+};
+
 // Put additional data structures here as per your requirement.
 
 #endif
