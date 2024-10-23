@@ -12,18 +12,6 @@
 #include <iomanip>
 using namespace std;
 
-/*  "argc" holds the number of command-line arguments.
-    "argv[]" holds the arguments themselves.
-
-    Example:
-    ./sim 32 8192 4 262144 8 3 10 gcc_trace.txt
-    argc = 9
-    argv[0] = "./sim"
-    argv[1] = "32"
-    argv[2] = "8192"
-    ... and so on
-*/
-
 void CreateAndLinkNewMemory(Memory*& topMemory, Memory* newMemory)
 {
    Memory* temp = topMemory;
@@ -196,6 +184,17 @@ void ShowOutputsOfMemoryHierarchy(Memory* topMemory)
    printf("q. memory traffic: %14u \n", mainMemoryInL1 ? mainMemoryInL1->MemoryTraffic : mainMemoryInL2->MemoryTraffic);
 }
 
+/*  "argc" holds the number of command-line arguments.
+    "argv[]" holds the arguments themselves.
+
+    Example:
+    ./sim 32 8192 4 262144 8 3 10 gcc_trace.txt
+    argc = 9
+    argv[0] = "./sim"
+    argv[1] = "32"
+    argv[2] = "8192"
+    ... and so on
+*/
 int main (int argc, char *argv[]) {
    FILE *fp;			// File pointer.
    char *trace_file;		// This variable holds the trace file name.
@@ -203,19 +202,6 @@ int main (int argc, char *argv[]) {
    char rw;			// This variable holds the request's type (read or write) obtained from the trace.
    uint32_t addr;		// This variable holds the request's address obtained from the trace.
 				// The header file <inttypes.h> above defines signed and unsigned integers of various sizes in a machine-agnostic way.  "uint32_t" is an unsigned integer of 32 bits.
-
-   // Exit with an error if the number of command-line arguments is incorrect.
-   // argv = { "/sim.exe", "32", "8192", "4", "262144", "8", "3","10","/gcc_trace.txt"};
-   // argv[0] = strdup("C:\\Users\\samch\\OneDrive\\Documents\\NCSU\\563\\Cache Project\\Cache-and-Memory-Hierarchy-Simulator\\sim.cc");
-   // argv[1] = strdup("32");
-   // argv[2] = strdup("8192");
-   // argv[3] = strdup("4");
-   // argv[4] = strdup("65536");
-   // argv[5] = strdup("8");
-   // argv[6] = strdup("0");
-   // argv[7] = strdup("0");
-   // argv[8] = strdup("C:\\Users\\samch\\OneDrive\\Documents\\NCSU\\563\\Cache Project\\Cache-and-Memory-Hierarchy-Simulator\\benchmarks\\gcc_trace.txt");
-   // argc = 9;
 
    if (argc != 9) {
       printf("Error: Expected 8 command-line arguments but was provided %d.\n", (argc - 1));
