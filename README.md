@@ -43,9 +43,10 @@ L2).
 extensions.
 
 - Example: 8KB 4-way set-associative L1 cache with 32B block size, 256KB 8-
-way set-associative L2 cache with 32B block size, L2 prefetch unit has 3 stream 
-buffers with 10 blocks each, gcc trace:
-sim 32 8192 4 262144 8 3 10 gcc_trace.txt.
+way set-associative L2 cache with 32B block size, L2 prefetch unit has 3 stream buffers with 10 blocks each, gcc trace:
+```bash
+    sim 32 8192 4 262144 8 3 10 gcc_trace.txt
+```
 
 ### Command Line Outputs
 
